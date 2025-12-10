@@ -1,7 +1,7 @@
-import React, { useEffect, useCallback } from 'react';
+import React, { useEffect, useCallback, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, FileText, Sparkles } from 'lucide-react';
-import { Button, Loading, useToast, useConfirm, AiRefineInput } from '@/components/shared';
+import { Button, Loading, useToast, useConfirm, AiRefineInput, ReferenceFileList, FilePreviewModal } from '@/components/shared';
 import { DescriptionCard } from '@/components/preview/DescriptionCard';
 import { useProjectStore } from '@/store/useProjectStore';
 import { refineDescriptions } from '@/api/endpoints';
@@ -22,6 +22,7 @@ export const DetailEditor: React.FC = () => {
   const { show, ToastContainer } = useToast();
   const { confirm, ConfirmDialog } = useConfirm();
   const [isAiRefining, setIsAiRefining] = React.useState(false);
+  const [previewFileId, setPreviewFileId] = useState<string | null>(null);
 
   // 加载项目数据
   useEffect(() => {
@@ -226,6 +227,13 @@ export const DetailEditor: React.FC = () => {
       {/* 主内容区 */}
       <main className="flex-1 p-3 md:p-6 overflow-y-auto min-h-0">
         <div className="max-w-7xl mx-auto">
+          {/* 已上传的文件列表 */}
+          <ReferenceFileList
+            projectId={projectId || null}
+            onFileClick={setPreviewFileId}
+            deleteMode="remove"
+          />
+          
           {currentProject.pages.length === 0 ? (
             <div className="text-center py-12 md:py-20">
               <div className="flex justify-center mb-4"><FileText size={48} className="text-gray-300" /></div>
@@ -265,6 +273,7 @@ export const DetailEditor: React.FC = () => {
       </main>
       <ToastContainer />
       {ConfirmDialog}
+      <FilePreviewModal fileId={previewFileId} onClose={() => setPreviewFileId(null)} />
     </div>
   );
 };
