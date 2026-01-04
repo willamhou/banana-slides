@@ -642,7 +642,10 @@ class PPTXBuilder:
             raise ValueError("No presentation to save")
         
         # Ensure directory exists
-        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        output_path_obj = Path(output_path)
+        output_dir = output_path_obj.parent
+        if str(output_dir) != '.':  # Only create directory if it's not current directory
+            output_dir.mkdir(parents=True, exist_ok=True)
         
         self.prs.save(output_path)
         logger.info(f"Saved presentation to: {output_path}")
