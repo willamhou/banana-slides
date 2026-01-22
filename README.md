@@ -249,9 +249,21 @@ OPENAI_API_BASE=https://api.openai.com/v1
 ```bash
 docker compose up -d
 ```
-更新：项目也在dockerhub提供了构建好的前端和后端镜像（同步主分支最新版本），名字分别为：
-1. anoinex/banana-slides-frontend
-2. anoinex/banana-slides-backend
+
+**⚡ 使用预构建镜像快速部署（推荐）**
+
+项目在 Docker Hub 提供了构建好的前端和后端镜像（同步主分支最新版本），可以跳过本地构建步骤，实现快速部署：
+
+```bash
+# 使用预构建镜像启动（更快、更稳定）
+docker compose -f docker-compose.prod.yml up -d
+```
+
+镜像名称：
+- `anoinex/banana-slides-frontend:latest`
+- `anoinex/banana-slides-backend:latest`
+
+详细的预构建镜像部署说明请参考 [DEPLOYMENT.md](./DEPLOYMENT.md)
 
 
 > [!TIP]
