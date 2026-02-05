@@ -218,7 +218,8 @@ cp .env.example .env
 ```
 
 编辑 `.env` 文件，配置必要的环境变量：
-> **项目中大模型接口以AIHubMix平台格式为标准，推荐使用 [AIHubMix](https://aihubmix.com/?aff=17EC) 获取API密钥，减小迁移成本**  
+> **项目中大模型接口以AIHubMix平台格式为标准，推荐使用 [AIHubMix](https://aihubmix.com/?aff=17EC) 获取API密钥，减小迁移成本**
+> **友情提示：谷歌nano banana pro模型接口费用较高，请注意调用成本**
 ```env
 # AI Provider格式配置 (gemini / openai / vertex)
 AI_PROVIDER_FORMAT=gemini
@@ -571,7 +572,8 @@ banana-slides/
 
 欢迎提出新功能建议或反馈，本人也会~~佛系~~回答大家问题
 
-<img width="301" alt="image" src="https://github.com/user-attachments/assets/dde3f594-4ec1-4360-aa76-95b85857174b" />
+<img width="301 alt="image" src="https://github.com/user-attachments/assets/c6ab4c96-8e89-4ab3-b347-04d50df4989b" />
+
 
 
   
