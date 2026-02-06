@@ -618,7 +618,7 @@ banana-slides/
 
 
 <h2>🚀 Sponsor / 赞助 </h2>
-
+<br>
 <div align="center">
 <a href="https://aihubmix.com/?aff=17EC">
   <img src="./assets/logo_aihubmix.png" alt="AIHubMix" style="height:48px;">
@@ -629,8 +629,11 @@ banana-slides/
 
 <div align="center">
 
+ <br>
 
- <img width="120" alt="image" src="https://github.com/user-attachments/assets/ac2ad6ec-c1cf-4aaa-859c-756b54168c96" />
+<a href="https://api.chatfire.site/login?inviteCode=A15CD6A0"><img width="200" alt="image" src="https://github.com/user-attachments/assets/d6bd255f-ba2c-4ea3-bd90-fef292fc3397" />
+</a>
+
 
 <details>
   <summary>感谢<a href="https://api.chatfire.site/login?inviteCode=A15CD6A0">AI火宝</a>对本项目的赞助</summary>
