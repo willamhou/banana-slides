@@ -1,6 +1,8 @@
 """Settings Controller - handles application settings endpoints"""
 
+import json
 import logging
+import os
 import shutil
 import tempfile
 from pathlib import Path
@@ -18,6 +20,7 @@ from services.ai_providers.image.baidu_inpainting_provider import create_baidu_i
 from services.task_manager import task_manager
 
 logger = logging.getLogger(__name__)
+ALLOWED_PROVIDER_FORMATS = {"openai", "gemini", "lazyllm"}
 
 settings_bp = Blueprint(
     "settings", __name__, url_prefix="/api/settings"
@@ -71,6 +74,18 @@ def temporary_settings_override(settings_override: dict):
         if settings_override.get("image_caption_model"):
             original_values["IMAGE_CAPTION_MODEL"] = current_app.config.get("IMAGE_CAPTION_MODEL")
             current_app.config["IMAGE_CAPTION_MODEL"] = settings_override["image_caption_model"]
+
+        if settings_override.get("image_caption_model_source"):
+            original_values["IMAGE_CAPTION_MODEL_SOURCE"] = current_app.config.get("IMAGE_CAPTION_MODEL_SOURCE")
+            current_app.config["IMAGE_CAPTION_MODEL_SOURCE"] = settings_override["image_caption_model_source"]
+
+        if settings_override.get("text_model_source"):
+            original_values["TEXT_MODEL_SOURCE"] = current_app.config.get("TEXT_MODEL_SOURCE")
+            current_app.config["TEXT_MODEL_SOURCE"] = settings_override["text_model_source"]
+
+        if settings_override.get("image_model_source"):
+            original_values["IMAGE_MODEL_SOURCE"] = current_app.config.get("IMAGE_MODEL_SOURCE")
+            current_app.config["IMAGE_MODEL_SOURCE"] = settings_override["image_model_source"]
 
         if settings_override.get("mineru_api_base"):
             original_values["MINERU_API_BASE"] = current_app.config.get("MINERU_API_BASE")
@@ -155,8 +170,9 @@ def update_settings():
         # Update AI provider format configuration
         if "ai_provider_format" in data:
             provider_format = data["ai_provider_format"]
-            if provider_format not in ["openai", "gemini"]:
-                return bad_request("AI provider format must be 'openai' or 'gemini'")
+            if provider_format not in ALLOWED_PROVIDER_FORMATS:
+                allowed_values = "', '".join(sorted(ALLOWED_PROVIDER_FORMATS))
+                return bad_request(f"AI provider format must be one of '{allowed_values}'")
             settings.ai_provider_format = provider_format
 
         # Update API configuration
@@ -246,6 +262,28 @@ def update_settings():
         if "baidu_ocr_api_key" in data:
             settings.baidu_ocr_api_key = data["baidu_ocr_api_key"] or None
 
+        # Update LazyLLM source configuration
+        if "text_model_source" in data:
+            settings.text_model_source = (data["text_model_source"] or "").strip() or None
+
+        if "image_model_source" in data:
+            settings.image_model_source = (data["image_model_source"] or "").strip() or None
+
+        if "image_caption_model_source" in data:
+            settings.image_caption_model_source = (data["image_caption_model_source"] or "").strip() or None
+
+        if "lazyllm_api_keys" in data:
+            keys_data = data["lazyllm_api_keys"]
+            if isinstance(keys_data, dict):
+                # Merge with existing keys (only update non-empty values)
+                existing = settings.get_lazyllm_api_keys_dict()
+                for vendor, key in keys_data.items():
+                    if key:  # Only update if a new value is provided
+                        existing[vendor] = key
+                settings.lazyllm_api_keys = json.dumps(existing) if existing else None
+            elif keys_data is None:
+                settings.lazyllm_api_keys = None
+
         settings.updated_at = datetime.now(timezone.utc)
         db.session.commit()
 
@@ -279,12 +317,16 @@ def reset_settings():
         # Priority logic:
         # - Check AI_PROVIDER_FORMAT
         # - If "openai" -> use OPENAI_API_BASE / OPENAI_API_KEY
+        # - If "lazyllm" -> keep API base/key empty (uses source-specific env keys)
         # - Otherwise (default "gemini") -> use GOOGLE_API_BASE / GOOGLE_API_KEY
         settings.ai_provider_format = Config.AI_PROVIDER_FORMAT
 
         if (Config.AI_PROVIDER_FORMAT or "").lower() == "openai":
             default_api_base = Config.OPENAI_API_BASE or None
             default_api_key = Config.OPENAI_API_KEY or None
+        elif (Config.AI_PROVIDER_FORMAT or "").lower() == "lazyllm":
+            default_api_base = None
+            default_api_key = None
         else:
             default_api_base = Config.GOOGLE_API_BASE or None
             default_api_key = Config.GOOGLE_API_KEY or None
@@ -303,6 +345,10 @@ def reset_settings():
         settings.enable_image_reasoning = False
         settings.image_thinking_budget = 1024
         settings.baidu_ocr_api_key = Config.BAIDU_OCR_API_KEY or None
+        settings.text_model_source = getattr(Config, 'TEXT_MODEL_SOURCE', None)
+        settings.image_model_source = getattr(Config, 'IMAGE_MODEL_SOURCE', None)
+        settings.image_caption_model_source = getattr(Config, 'IMAGE_CAPTION_MODEL_SOURCE', None)
+        settings.lazyllm_api_keys = None
         settings.image_resolution = Config.DEFAULT_RESOLUTION
         settings.image_aspect_ratio = Config.DEFAULT_ASPECT_RATIO
         settings.max_description_workers = Config.MAX_DESCRIPTION_WORKERS
@@ -332,8 +378,8 @@ def reset_settings():
 @settings_bp.route("/verify", methods=["POST"], strict_slashes=False)
 def verify_api_key():
     """
-    POST /api/settings/verify - 验证API key是否可用
-    通过调用一个轻量的gemini-3-flash-preview测试请求（思考budget=0）来判断
+    POST /api/settings/verify - 验证模型配置是否可用
+    通过调用一个轻量测试请求（thinking_budget=0）来判断
 
     Returns:
         {
@@ -360,19 +406,25 @@ def verify_api_key():
             settings_override["api_base_url"] = settings.api_base_url
         if settings.ai_provider_format:
             settings_override["ai_provider_format"] = settings.ai_provider_format
+        if settings.text_model:
+            settings_override["text_model"] = settings.text_model
 
         # 使用上下文管理器临时应用用户配置进行验证
         with temporary_settings_override(settings_override):
             from services.ai_providers import get_text_provider
 
-            # 使用 gemini-3-flash-preview 模型进行验证（思考budget=0，最小开销）
-            verification_model = "gemini-3-flash-preview"
+            verification_model = (
+                settings.text_model
+                or current_app.config.get("TEXT_MODEL")
+                or Config.TEXT_MODEL
+                or "gemini-3-flash-preview"
+            )
 
             # 尝试创建provider并调用一个简单的测试请求
             try:
                 provider = get_text_provider(model=verification_model)
                 # 调用一个简单的测试请求（思考budget=0，最小开销）
-                response = provider.generate_text("Hello", thinking_budget=0)
+                provider.generate_text("Hello", thinking_budget=0)
 
                 logger.info("API key verification successful")
                 return success_response({
@@ -383,9 +435,15 @@ def verify_api_key():
             except ValueError as ve:
                 # API key未配置
                 logger.warning(f"API key not configured: {str(ve)}")
+                provider_format = (settings.ai_provider_format or "").lower()
+                if provider_format == "lazyllm":
+                    source = current_app.config.get("TEXT_MODEL_SOURCE", Config.TEXT_MODEL_SOURCE).upper()
+                    message = f"LazyLLM API key 未配置，请设置 {source}_API_KEY"
+                else:
+                    message = "API key 未配置，请在设置中配置 API key 和 API Base URL"
                 return success_response({
                     "available": False,
-                    "message": "API key 未配置，请在设置中配置 API key 和 API Base URL"
+                    "message": message
                 })
             except Exception as e:
                 # API调用失败（可能是key无效、余额不足等）
@@ -524,6 +582,39 @@ def _sync_settings_to_config(settings: Settings):
     if settings.baidu_ocr_api_key:
         current_app.config["BAIDU_OCR_API_KEY"] = settings.baidu_ocr_api_key
         logger.info("Updated BAIDU_OCR_API_KEY from settings")
+
+    # Sync LazyLLM source settings
+    if settings.text_model_source:
+        old_source = current_app.config.get("TEXT_MODEL_SOURCE")
+        if old_source != settings.text_model_source:
+            ai_config_changed = True
+        current_app.config["TEXT_MODEL_SOURCE"] = settings.text_model_source
+
+    if settings.image_model_source:
+        old_source = current_app.config.get("IMAGE_MODEL_SOURCE")
+        if old_source != settings.image_model_source:
+            ai_config_changed = True
+        current_app.config["IMAGE_MODEL_SOURCE"] = settings.image_model_source
+
+    if settings.image_caption_model_source:
+        old_source = current_app.config.get("IMAGE_CAPTION_MODEL_SOURCE")
+        if old_source != settings.image_caption_model_source:
+            ai_config_changed = True
+        current_app.config["IMAGE_CAPTION_MODEL_SOURCE"] = settings.image_caption_model_source
+
+    # Sync LazyLLM vendor API keys to environment variables
+    # (lazyllm_env.py reads from os.environ via {SOURCE}_API_KEY)
+    if settings.lazyllm_api_keys:
+        try:
+            keys = json.loads(settings.lazyllm_api_keys)
+            for vendor, key in keys.items():
+                if key:
+                    env_key = f"{vendor.upper()}_API_KEY"
+                    if os.environ.get(env_key) != key:
+                        ai_config_changed = True
+                    os.environ[env_key] = key
+        except (json.JSONDecodeError, TypeError):
+            pass
     
     # Clear AI service cache if AI-related configuration changed
     if ai_config_changed:
@@ -560,6 +651,10 @@ def _create_file_parser():
         openai_api_key=current_app.config.get("OPENAI_API_KEY", ""),
         openai_api_base=current_app.config.get("OPENAI_API_BASE", ""),
         image_caption_model=current_app.config.get("IMAGE_CAPTION_MODEL", Config.IMAGE_CAPTION_MODEL),
+        lazyllm_image_caption_source=current_app.config.get(
+            "IMAGE_CAPTION_MODEL_SOURCE",
+            Config.IMAGE_CAPTION_MODEL_SOURCE,
+        ),
         provider_format=current_app.config.get("AI_PROVIDER_FORMAT", "gemini"),
     )
 
@@ -654,11 +749,12 @@ def _test_image_model():
     ai_service = AIService()
     test_image_path = _get_test_image_path()
     prompt = "生成一张简洁、明亮、适合演示文稿的背景图。"
+    settings = Settings.get_settings()
     result = ai_service.generate_image(
         prompt=prompt,
         ref_image_path=str(test_image_path),
-        aspect_ratio="16:9",
-        resolution="1K"
+        aspect_ratio=settings.image_aspect_ratio or "16:9",
+        resolution=settings.image_resolution or "2K"
     )
 
     if result is None:
@@ -819,6 +915,8 @@ def run_settings_test(test_name: str):
             test_settings["image_model"] = global_settings.image_model
         if global_settings.image_caption_model:
             test_settings["image_caption_model"] = global_settings.image_caption_model
+        if current_app.config.get("IMAGE_CAPTION_MODEL_SOURCE"):
+            test_settings["image_caption_model_source"] = current_app.config.get("IMAGE_CAPTION_MODEL_SOURCE")
         if global_settings.mineru_api_base:
             test_settings["mineru_api_base"] = global_settings.mineru_api_base
         if global_settings.mineru_token:
