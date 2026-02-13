@@ -138,8 +138,10 @@ export const OutlineEditor: React.FC = () => {
   const { confirm, ConfirmDialog } = useConfirm();
   const { show, ToastContainer } = useToast();
 
-  // 左侧可编辑文本区域
-  const textareaRef = useRef<MarkdownTextareaRef>(null);
+  // 左侧可编辑文本区域 — desktop and mobile use separate refs to avoid
+  // the shared-ref bug where insertAtCursor targets the wrong (hidden) instance.
+  const desktopTextareaRef = useRef<MarkdownTextareaRef>(null);
+  const mobileTextareaRef = useRef<MarkdownTextareaRef>(null);
   const getInputText = useCallback((project: typeof currentProject) => {
     if (!project) return '';
     if (project.creation_type === 'outline') return project.outline_text || project.idea_prompt || '';
@@ -185,7 +187,9 @@ export const OutlineEditor: React.FC = () => {
   }, []);
 
   const insertAtCursor = useCallback((markdown: string) => {
-    textareaRef.current?.insertAtCursor(markdown);
+    // Prefer the desktop ref (visible at md+), fall back to mobile
+    const ref = desktopTextareaRef.current || mobileTextareaRef.current;
+    ref?.insertAtCursor(markdown);
   }, []);
 
   const { handlePaste: handleImagePaste, handleFiles: handleImageFiles, isUploading: _isUploadingImage } = useImagePaste({
@@ -476,7 +480,7 @@ export const OutlineEditor: React.FC = () => {
                 </div>
               </div>
               <MarkdownTextarea
-                ref={textareaRef}
+                ref={desktopTextareaRef}
                 value={inputText}
                 onChange={handleInputChange}
                 onPaste={handleImagePaste}
@@ -519,7 +523,7 @@ export const OutlineEditor: React.FC = () => {
               </button>
             </div>
             <MarkdownTextarea
-              ref={textareaRef}
+              ref={mobileTextareaRef}
               value={inputText}
               onChange={handleInputChange}
               onPaste={handleImagePaste}
