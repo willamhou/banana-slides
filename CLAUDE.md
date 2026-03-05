@@ -15,21 +15,21 @@ Banana Slides is an AI-native PPT generator that uses the nano banana pro model 
 
 ## Common Development Commands
 
-### Backend (all commands from project root)
+### Backend
 
 ```bash
+# From project root
 uv sync                                        # Install dependencies
 uv sync --extra test                           # Install with test deps (pytest, etc.)
-
-cd backend
-uv run alembic upgrade head                    # Run migrations
-uv run alembic revision --autogenerate -m "desc"  # Create new migration
-uv run python app.py                           # Start server
-
-# Tests (from project root; testpaths configured in pyproject.toml)
-uv run pytest                                  # Run all tests
+uv run pytest                                  # Run all tests (testpaths in pyproject.toml)
 uv run pytest backend/tests/unit/test_file_parser_service.py  # Single file
 uv run pytest --cov=backend                    # With coverage
+
+# From backend/
+cd backend
+uv run alembic upgrade head                    # Run migrations
+uv run alembic revision --autogenerate -m "add_user_table"  # Create new migration
+uv run python app.py                           # Start server
 ```
 
 ### Frontend (from `frontend/`)
