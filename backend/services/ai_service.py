@@ -816,6 +816,11 @@ class AIService:
 
             # 添加主参考图片（如果提供了路径）
             if ref_image_path:
+                # 验证路径在 upload 目录内
+                upload_folder = get_config().UPLOAD_FOLDER
+                abs_ref = os.path.abspath(ref_image_path)
+                if not abs_ref.startswith(os.path.abspath(upload_folder)):
+                    raise ValueError(f"Path traversal attempt blocked: {ref_image_path}")
                 if not os.path.exists(ref_image_path):
                     raise FileNotFoundError(f"Reference image not found: {ref_image_path}")
                 main_ref_image = Image.open(ref_image_path)

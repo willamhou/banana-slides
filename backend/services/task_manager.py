@@ -23,7 +23,8 @@ def _get_image_prompt_field_names() -> set | None:
         if settings.image_prompt_extra_fields is None:
             return None  # 未配置 → 全部允许
         return set(settings.get_image_prompt_extra_fields())
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Failed to read image_prompt_extra_fields setting: {e}")
         return None
 
 
@@ -673,8 +674,12 @@ def generate_single_page_image_task(task_id: str, project_id: str, page_id: str,
                 if page:
                     page.status = 'FAILED'
                     db.session.commit()
-            except Exception:
-                pass
+            except Exception as db_err:
+                logger.warning(f"Failed to update page status: {db_err}")
+                try:
+                    db.session.rollback()
+                except Exception as rb_err:
+                    logger.warning(f"Failed to rollback session: {rb_err}")
 
 
 def edit_page_image_task(task_id: str, project_id: str, page_id: str,
@@ -731,7 +736,6 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
                 # Clean up temp directory if created
                 if temp_dir:
                     import shutil
-                    from pathlib import Path
                     temp_path = Path(temp_dir)
                     if temp_path.exists():
                         shutil.rmtree(temp_dir)
@@ -773,8 +777,12 @@ def edit_page_image_task(task_id: str, project_id: str, page_id: str,
                 if page:
                     page.status = 'FAILED'
                     db.session.commit()
-            except Exception:
-                pass
+            except Exception as db_err:
+                logger.warning(f"Failed to update page status: {db_err}")
+                try:
+                    db.session.rollback()
+                except Exception as rb_err:
+                    logger.warning(f"Failed to rollback session: {rb_err}")
 
 
 def generate_material_image_task(task_id: str, project_id: str, prompt: str,
@@ -1102,8 +1110,12 @@ def process_ppt_renovation_task(task_id: str, project_id: str, ai_service,
                 if project:
                     project.status = 'DRAFT'
                     db.session.commit()
-            except Exception:
-                pass
+            except Exception as db_err:
+                logger.warning(f"Failed to update project status: {db_err}")
+                try:
+                    db.session.rollback()
+                except Exception as rb_err:
+                    logger.warning(f"Failed to rollback session: {rb_err}")
 
 
 def export_editable_pptx_with_recursive_analysis_task(
